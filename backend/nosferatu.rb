@@ -99,8 +99,6 @@ module Nosferatu::Controllers
       render :links_show
     end
   end
-  
-
 end
 
 module Nosferatu::Views
