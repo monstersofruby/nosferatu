@@ -2,10 +2,10 @@ require 'rubygems'
 require 'spec'
 require 'nosferatu'
 
-describe Nosferatu::Controllers::Index do
+describe Nosferatu::Controllers::LinksIndex do
   describe '/' do
     it 'should be success' do
-      get '/'
+      Nosferatu::Controllers::LinksIndex.new().get('/')
       response.should be_success
     end
   end
