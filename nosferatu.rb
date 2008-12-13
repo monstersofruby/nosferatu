@@ -12,9 +12,11 @@ DataMapper.setup(:default, "sqlite3:///#{Dir.pwd}/nosferatu.sqlite")
 
 class Link
   include DataMapper::Resource
+  has n, :comments
   property :id, Integer, :serial => true
   property :title, String
   property :url, String
+  property :votes, Integer, :default => 0
   property :description, Text
   property :created_at, DateTime
   property :updated_at, DateTime
@@ -23,6 +25,20 @@ class Link
   # validates_presence_of :url
 end
 
+class Comment
+  include DataMapper::Resource
+  belongs_to :link
+  property :id, Integer, :serial => true
+  property :author, String
+  property :body, Text
+  property :link_id, Integer
+  property :created_at, DateTime
+  # 
+  # validates_presence_of :title
+  # validates_presence_of :url
+end
+
+
 DataMapper.auto_upgrade!
 
 Camping.goes :Nosferatu
@@ -30,55 +46,121 @@ Camping.goes :Nosferatu
 
 module Nosferatu::Controllers
 
- # The root slash shows the `index' view.
- class Index < R '(/|/index.html|/index.json)'
-   def get(page_name)
-     @links = Link.all
-     if page_name =~ /.html/
-       render :index
-     else
-       @headers['Content-Type'] = "text/javascript"
-       @links.to_json
-     end
+  class LinksIndex < R '(/|/links|/links.json)'
+    def get(format)
+      @links = Link.all
+      unless format =~ /.json/
+        render :links_index
+      else
+         @headers['Content-Type'] = "text/javascript"
+         @links.to_json
+      end
+    end
+    
+    def post(page_name)
+      @link = 
+        Link.new(
+          :title          => input.title,
+          :url            => input.url,
+          :description    => input.description,
+          :created_at     => Time.now
+        )
+        
+      @link.save
+      render :links_show 
+    end
   end
- end
-
- # Any other page name gets sent to the view
- # of the same name.
- #
- #   /index -> Views#index
- #   /sample -> Views#sample
- #
- class Page < R '/(\w+)'
-   def get(page_name)
-     render page_name
-   end
- end
+ 
+  class LinksShow < R '/links/(\d+)'
+    def get link_id
+      @link = Link.first(:id => link_id)
+      render :links_show
+    end
+  end
+ 
+  class LinksNew < R '/links/new'
+    def get
+      render :links_new
+    end
+  end
+ 
+  class Votes < R '/links/(\d+)/votes'
+    def post(link_id)
+      @link = Link.first(:id => link_id)
+      @link.update_attributes(:votes => (@link.votes + 1))
+      render :links_show
+    end
+  end
+  
+  class Comments < R '/links/(\d+)/comments'
+    def post(link_id)
+      @link = Link.first(:id => link_id)
+      @link.comments.create(:author => input.author, :body => input.body, :created_at => Time.now)
+      render :links_show
+    end
+  end
+  
 
 end
 
 module Nosferatu::Views
 
- # If you have a `layout' method like this, it
- # will wrap the HTML in the other methods.  The
- # `self << yield' is where the HTML is inserted.
-def layout
-  html do
-    title { 'Nosferatu Links' }
-    body { self << yield}
+  def layout
+    html do
+      title { 'Nosferatu Links' }
+      body do
+        div :id => 'menu' do
+          ul do
+            li{ a 'portada', :href => '/' }
+            li{ a 'añadir enlace', :href => '/links/new' }
+          end
+        end
+        self << yield
+      end
+    end
   end
-end
 
- # The `index' view.  Inside your views, you express
- # the HTML in Ruby.  See http://code.whytheluckystiff.net/markaby/.
- def index
-  @links.each do |link|
-    p link.title
+  def links_index
+    @links.each do |link|
+      a link.title, :href => "/links/#{link.id}"
+    end
   end
- end
-
- # The `sample' view.
- def sample
-   p 'A sample page'
- end
+  
+  def links_show
+    h2 @link.title
+    a @link.url, :href => @link.url
+    p @link.description
+    
+    p "Votos: #{@link.votes}"
+    form :action => "/links/#{@link.id}/votes", :method => 'post', :id => "new_vote" do
+      input :type => 'submit', :value => 'Vota'
+    end    
+    
+    h3 "Comentarios"
+    div :id => 'comments' do
+      @link.comments.each do |comment|
+        p { "#{comment.author} dijo a las #{comment.created_at.to_s}: #{comment.body}" }
+      end
+    end
+    h3 "Opina sobre este link"
+    form :action => "/links/#{@link.id}/comments", :method => 'post', :id => "new_comment" do
+      textarea :name => 'body'
+      label 'Autor'
+      input :type => 'text', :name => 'author'
+      input :type => 'submit', :value => 'Añadir'
+    end
+  end
+  
+  def links_new    
+    h2 'Añadir enlace'
+    form :action => '/links', :method => 'post' do
+      label 'Título'
+      input :type => 'text', :name => 'title'
+      label 'Url'
+      input :type => 'text', :name => 'url'
+      label 'Descripción'
+      textarea :name => 'description'
+      input :type => 'submit', :value => 'Añadir'
+    end
+  end
 end
